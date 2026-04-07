@@ -1,0 +1,102 @@
+{
+  "name": "nexclaw-vscode",
+  "displayName": "NexClaw",
+  "description": "VS Code companion for NexClaw with a visual Control Center and terminal-aligned theme.",
+  "version": "0.1.1",
+  "publisher": "devnull-bootloader",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Themes",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:nexclaw.start",
+    "onCommand:nexclaw.openDocs",
+    "onCommand:nexclaw.openControlCenter",
+    "onView:nexclaw.controlCenter"
+  ],
+  "main": "./src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "nexclaw.start",
+        "title": "NexClaw: Launch in Terminal",
+        "category": "NexClaw"
+      },
+      {
+        "command": "nexclaw.openDocs",
+        "title": "NexClaw: Open Repository",
+        "category": "NexClaw"
+      },
+      {
+        "command": "nexclaw.openControlCenter",
+        "title": "NexClaw: Open Control Center",
+        "category": "NexClaw"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "nexclaw",
+          "title": "NexClaw",
+          "icon": "media/openclaude.svg"
+        }
+      ]
+    },
+    "views": {
+      "nexclaw": [
+        {
+          "id": "nexclaw.controlCenter",
+          "name": "Control Center",
+          "type": "webview"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "NexClaw",
+      "properties": {
+        "nexclaw.launchCommand": {
+          "type": "string",
+          "default": "nexclaw",
+          "description": "Command run in the integrated terminal when launching NexClaw."
+        },
+        "nexclaw.terminalName": {
+          "type": "string",
+          "default": "NexClaw",
+          "description": "Integrated terminal tab name for NexClaw sessions."
+        },
+        "nexclaw.useOpenAIShim": {
+          "type": "boolean",
+          "default": false,
+          "description": "Optionally set CLAUDE_CODE_USE_OPENAI=1 in launched NexClaw terminals."
+        }
+      }
+    },
+    "themes": [
+      {
+        "label": "NexClaw Terminal Black",
+        "uiTheme": "vs-dark",
+        "path": "./themes/NexClaw-Terminal-Black.json"
+      }
+    ]
+  },
+  "scripts": {
+    "lint": "node --check ./src/extension.js",
+    "package": "npx @vscode/vsce package --no-dependencies"
+  },
+  "keywords": [
+    "nexclaw",
+    "terminal",
+    "theme",
+    "cli",
+    "llm"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_ORG/nexclaw"
+  },
+  "license": "MIT"
+}

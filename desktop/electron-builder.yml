@@ -1,0 +1,39 @@
+appId: com.nexclaw.desktop
+productName: NexClaw
+directories:
+  buildResources: build
+  output: release
+files:
+  - out/**/*
+extraResources:
+  - from: ../dist/cli.mjs
+    to: cli/cli.mjs
+    filter:
+      - "**/*"
+  - from: ../bin/nexclaw
+    to: cli/nexclaw
+    filter:
+      - "**/*"
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ${name}-${version}-setup.${ext}
+  signAndEditExecutable: false
+  sign: null
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: NexClaw
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  artifactName: ${name}-${version}.${ext}
+  category: public.app-category.developer-tools
+dmg:
+  artifactName: ${name}-${version}.${ext}
+forceCodeSigning: false

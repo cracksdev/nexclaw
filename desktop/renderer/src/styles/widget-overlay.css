@@ -1,0 +1,11 @@
+/* Transparent shell for the always-on-top Electron widget window */
+html,
+body,
+#root {
+  background: transparent !important;
+}
+
+body {
+  background: transparent !important;
+  overflow: hidden;
+}
