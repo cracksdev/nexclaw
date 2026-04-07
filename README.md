@@ -38,7 +38,11 @@ Claude Code is an excellent AI coding agent — but it's locked to Anthropic mod
 
 ## Screenshots
 
-<!-- Coming soon -->
+<p align="center">
+  <a href="https://imgur.com/a/qxaeDve" title="View on Imgur">
+    <img src="https://i.imgur.com/9kAfcIo.gif" alt="NexClaw desktop app demo" width="720" />
+  </a>
+</p>
 
 ---
 
