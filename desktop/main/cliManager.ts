@@ -1,6 +1,7 @@
 import { spawn, execSync, type ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
 import { existsSync, readdirSync } from 'fs'
+import { homedir, userInfo } from 'os'
 import { join } from 'path'
 import { app } from 'electron'
 
@@ -130,21 +131,23 @@ export class CliManager extends EventEmitter {
   private buildProviderEnv(): Record<string, string> {
     const cfg = this.providerConfig
     if (!cfg || !cfg.provider || cfg.provider === 'anthropic') {
-      // Default: Anthropic — just pass API key if provided
-      if (cfg?.apiKey) return { ANTHROPIC_API_KEY: cfg.apiKey }
+      // Default: Anthropic — only pass key if non-empty after trim (else CLI uses ~/.claude/)
+      const k = cfg?.apiKey?.trim()
+      if (k) return { ANTHROPIC_API_KEY: k }
       return {}
     }
 
+    const key = cfg.apiKey?.trim()
     const env: Record<string, string> = {}
 
     if (cfg.provider === 'openai') {
       env.CLAUDE_CODE_USE_OPENAI = '1'
-      if (cfg.apiKey) env.OPENAI_API_KEY = cfg.apiKey
+      if (key) env.OPENAI_API_KEY = key
       if (cfg.model) env.OPENAI_MODEL = cfg.model
       env.OPENAI_BASE_URL = cfg.baseUrl || 'https://api.openai.com/v1'
     } else if (cfg.provider === 'gemini') {
       env.CLAUDE_CODE_USE_GEMINI = '1'
-      if (cfg.apiKey) env.GEMINI_API_KEY = cfg.apiKey
+      if (key) env.GEMINI_API_KEY = key
       if (cfg.model) env.GEMINI_MODEL = cfg.model
       if (cfg.baseUrl) env.GEMINI_BASE_URL = cfg.baseUrl
     } else if (cfg.provider === 'ollama') {
@@ -154,25 +157,71 @@ export class CliManager extends EventEmitter {
       env.OPENAI_API_KEY = 'ollama'
     } else if (cfg.provider === 'deepseek') {
       env.CLAUDE_CODE_USE_OPENAI = '1'
-      if (cfg.apiKey) env.OPENAI_API_KEY = cfg.apiKey
+      if (key) env.OPENAI_API_KEY = key
       if (cfg.model) env.OPENAI_MODEL = cfg.model
       env.OPENAI_BASE_URL = cfg.baseUrl || 'https://api.deepseek.com/v1'
     } else if (cfg.provider === 'github') {
       env.CLAUDE_CODE_USE_GITHUB = '1'
-      if (cfg.apiKey) env.GITHUB_TOKEN = cfg.apiKey
+      if (key) env.GITHUB_TOKEN = key
       if (cfg.model) env.OPENAI_MODEL = cfg.model
       if (cfg.baseUrl) env.OPENAI_BASE_URL = cfg.baseUrl
     } else if (cfg.provider === 'codex') {
       env.CLAUDE_CODE_USE_OPENAI = '1'
-      if (cfg.apiKey) env.CODEX_API_KEY = cfg.apiKey
+      if (key) env.CODEX_API_KEY = key
       if (cfg.model) env.OPENAI_MODEL = cfg.model
       if (cfg.baseUrl) env.OPENAI_BASE_URL = cfg.baseUrl
     } else {
       // Generic OpenAI-compatible fallback
       env.CLAUDE_CODE_USE_OPENAI = '1'
-      if (cfg.apiKey) env.OPENAI_API_KEY = cfg.apiKey
+      if (key) env.OPENAI_API_KEY = key
       if (cfg.model) env.OPENAI_MODEL = cfg.model
       if (cfg.baseUrl) env.OPENAI_BASE_URL = cfg.baseUrl
+    }
+
+    return env
+  }
+
+  /**
+   * macOS GUI apps inherit a sparse `process.env` (no shell profile). Empty
+   * `ANTHROPIC_API_KEY=` etc. still get forwarded and make Anthropic return 401;
+   * stripping them lets the CLI fall back to ~/.claude/. HOME/USER are normalized
+   * so credential paths resolve like in Terminal.
+   */
+  private buildCliChildEnv(providerEnv: Record<string, string>): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      ...providerEnv,
+      FORCE_COLOR: '0',
+      NO_COLOR: '1',
+    }
+
+    const home = homedir()
+    if (!env.HOME?.trim()) {
+      env.HOME = home
+    }
+    if (process.platform === 'win32' && !env.USERPROFILE?.trim()) {
+      env.USERPROFILE = home
+    }
+    if (process.platform === 'darwin' && !env.USER?.trim()) {
+      try {
+        env.USER = userInfo().username
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const stripIfEmpty = [
+      'ANTHROPIC_API_KEY',
+      'OPENAI_API_KEY',
+      'GEMINI_API_KEY',
+      'GITHUB_TOKEN',
+      'CODEX_API_KEY',
+    ] as const
+    for (const name of stripIfEmpty) {
+      const v = env[name]
+      if (v !== undefined && String(v).trim() === '') {
+        delete env[name]
+      }
     }
 
     return env
@@ -315,7 +364,7 @@ export class CliManager extends EventEmitter {
 
     dbg('spawn', 'node', args.join(' '))
     dbg('spawn', 'cwd=', this.workingDir)
-    dbg('spawn', 'cliPath exists?', require('fs').existsSync(cliPath))
+    dbg('spawn', 'cliPath exists?', existsSync(cliPath))
 
     this.buffer = ''
 
@@ -332,12 +381,7 @@ export class CliManager extends EventEmitter {
       this.process = spawn(nodeBin, args, {
         cwd: this.workingDir,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          ...providerEnv,
-          FORCE_COLOR: '0',
-          NO_COLOR: '1'
-        }
+        env: this.buildCliChildEnv(providerEnv),
       })
 
       dbg('spawn', 'pid=', this.process.pid)
