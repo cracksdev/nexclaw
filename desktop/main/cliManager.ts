@@ -1,7 +1,60 @@
-import { spawn, type ChildProcess } from 'child_process'
+import { spawn, execSync, type ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
+import { existsSync, readdirSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
+
+/**
+ * On macOS, packaged Electron apps launch with a minimal PATH that doesn't
+ * include Homebrew, nvm, or any user-installed Node. We resolve the binary
+ * explicitly so the CLI subprocess can actually start.
+ */
+function resolveNodeBinary(): string {
+  // 1. Try shell `which` — works if the GUI app was launched from a terminal
+  try {
+    const found = execSync('which node', { encoding: 'utf8', timeout: 2000 }).trim()
+    if (found && existsSync(found)) return found
+  } catch { /* ignore */ }
+
+  // 2. Check well-known macOS install paths (Homebrew arm64/x64, nvm default, system)
+  const candidates: string[] = [
+    '/opt/homebrew/bin/node',           // Homebrew Apple Silicon
+    '/usr/local/bin/node',              // Homebrew Intel / manual install
+    '/opt/homebrew/opt/node/bin/node',  // Homebrew via formula
+  ]
+  const home = process.env.HOME
+  if (home) {
+    const nvmVersionsDir = join(home, '.nvm', 'versions', 'node')
+    if (existsSync(nvmVersionsDir)) {
+      try {
+        const versions = readdirSync(nvmVersionsDir).filter((d) => d.startsWith('v'))
+        versions.sort((a, b) => {
+          const pa = a.slice(1).split('.').map((n) => parseInt(n, 10) || 0)
+          const pb = b.slice(1).split('.').map((n) => parseInt(n, 10) || 0)
+          const len = Math.max(pa.length, pb.length)
+          for (let i = 0; i < len; i++) {
+            const na = pa[i] ?? 0
+            const nb = pb[i] ?? 0
+            if (na !== nb) return na - nb
+          }
+          return 0
+        })
+        const latest = versions.at(-1)
+        if (latest) {
+          const nvmNode = join(nvmVersionsDir, latest, 'bin', 'node')
+          if (existsSync(nvmNode)) candidates.push(nvmNode)
+        }
+      } catch { /* ignore unreadable dir */ }
+    }
+  }
+  candidates.push('/usr/bin/node')
+  for (const p of candidates) {
+    if (existsSync(p)) return p
+  }
+
+  // 3. Fallback — let the OS try (will fail on Mac if PATH is stripped, but we've tried our best)
+  return 'node'
+}
 
 export type ToolPermissionOutcome = 'once' | 'always' | 'no'
 
@@ -274,7 +327,9 @@ export class CliManager extends EventEmitter {
       const providerEnv = this.buildProviderEnv()
       dbg('spawn', 'providerEnv keys=', Object.keys(providerEnv).join(','))
 
-      this.process = spawn('node', args, {
+      const nodeBin = resolveNodeBinary()
+      dbg('spawn', 'nodeBin=', nodeBin)
+      this.process = spawn(nodeBin, args, {
         cwd: this.workingDir,
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
