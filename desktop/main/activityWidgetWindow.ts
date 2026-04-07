@@ -1,6 +1,7 @@
 import { BrowserWindow, screen, app } from 'electron'
 import { join } from 'path'
 import type { ActivitySyncPayload } from './activityTypes'
+import { rendererLoadedFromDevServer } from './rendererEnv'
 
 const isDev = !app.isPackaged
 
@@ -55,6 +56,7 @@ export function createActivityWidgetWindow(): BrowserWindow {
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false,
+      webSecurity: rendererLoadedFromDevServer(),
     },
   })
 
