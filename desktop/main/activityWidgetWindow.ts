@@ -1,5 +1,6 @@
 import { BrowserWindow, screen, app } from 'electron'
 import { join } from 'path'
+import { pathToFileURL } from 'node:url'
 import type { ActivitySyncPayload } from './activityTypes'
 import { rendererLoadedFromDevServer } from './rendererEnv'
 
@@ -76,7 +77,8 @@ export function createActivityWidgetWindow(): BrowserWindow {
     const base = process.env['ELECTRON_RENDERER_URL'].replace(/\/$/, '')
     void win.loadURL(`${base}/widget.html`)
   } else {
-    void win.loadFile(join(__dirname, '../renderer/widget.html'))
+    const file = join(__dirname, '../renderer/widget.html')
+    void win.loadURL(pathToFileURL(file).href)
   }
 
   win.webContents.once('did-finish-load', () => {

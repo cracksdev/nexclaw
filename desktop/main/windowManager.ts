@@ -1,5 +1,6 @@
 import { BrowserWindow, shell, app } from 'electron'
 import { join } from 'path'
+import { pathToFileURL } from 'node:url'
 import { rendererLoadedFromDevServer } from './rendererEnv'
 
 const isDev = !app.isPackaged
@@ -39,7 +40,8 @@ export function createMainWindow(): BrowserWindow {
   if (isDev && process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'))
+    const file = join(__dirname, '../renderer/index.html')
+    void win.loadURL(pathToFileURL(file).href)
   }
 
   if (isDev) {
