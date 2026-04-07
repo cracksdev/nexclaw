@@ -33,8 +33,9 @@ mac:
       arch:
         - x64
         - arm64
-  artifactName: ${name}-${version}.${ext}
+  # One artifact name for both archs makes them overwrite the same .dmg → hdiutil convert fails.
+  artifactName: ${name}-${version}-${arch}.${ext}
   category: public.app-category.developer-tools
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: ${name}-${version}-${arch}.${ext}
 forceCodeSigning: false
