@@ -1,5 +1,7 @@
 # NexClaw
 
+<p align="center"><img src="desktop/renderer/src/styles/logo-nobg.png" width="120" alt="NexClaw Logo" /></p>
+
 **Use Claude Code with any AI model — OpenAI, Gemini, DeepSeek, Ollama, and more.**
 
 NexClaw is an open-source desktop app that wraps the Claude Code CLI engine and lets you switch AI providers freely. Same powerful coding agent, your choice of model.

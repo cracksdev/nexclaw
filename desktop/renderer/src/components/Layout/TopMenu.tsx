@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import logoUrl from '../../styles/logo.png'
 import {
   MessageSquare,
   LayoutDashboard,
@@ -64,7 +65,7 @@ export function TopMenu({ onSettingsClick }: TopMenuProps) {
         {/* App icon placeholder + model + version badge */}
         <div className="flex items-center gap-2 ml-0.5">
           <div className="w-8 h-8 rounded-full flex items-center justify-center">
-            <img src="/src/styles/logo.png" alt="NexClaw" className="w-full h-full object-fill rounded-full" />
+            <img src={logoUrl} alt="NexClaw" className="w-full h-full object-fill rounded-full" />
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] font-semibold text-text-primary capitalize tracking-tight">{modelLabel}</span>

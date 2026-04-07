@@ -19,7 +19,10 @@ export function createMainWindow(): BrowserWindow {
       nodeIntegration: false
     },
     backgroundColor: '#ffffff',
-    show: false
+    show: false,
+    icon: app.isPackaged
+      ? join(process.resourcesPath, '../build/icon.png')
+      : join(__dirname, '../../build/icon.png'),
   })
 
   win.on('ready-to-show', () => {

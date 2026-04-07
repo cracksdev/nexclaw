@@ -1,4 +1,5 @@
 import React, { useRef, useEffect } from 'react'
+import logoNobgUrl from '../../styles/logo-nobg.png'
 import { useChatStore } from '../../stores/chatStore'
 import { MessageBubble } from './MessageBubble'
 import { InputBar } from './InputBar'
@@ -43,7 +44,7 @@ export function ChatPanel({ onOpenSettings }: ChatPanelProps) {
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-1">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-text-muted">
-              <img src="/src/styles/logo-nobg.png" alt="NexClaw" className="w-32 h-32 object-fill rounded-full" />
+              <img src={logoNobgUrl} alt="NexClaw" className="w-32 h-32 object-fill rounded-full" />
             <h2 className="text-xl font-semibold text-text-primary mb-1.5 tracking-tight">NexClaw</h2>
             <p className="text-[13px] text-center max-w-md mb-1 text-text-secondary">
               AI coding assistant powered by Claude Code

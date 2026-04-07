@@ -1,5 +1,6 @@
 appId: com.nexclaw.desktop
 productName: NexClaw
+icon: build/icon.png
 directories:
   buildResources: build
   output: release
