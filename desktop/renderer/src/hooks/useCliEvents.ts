@@ -23,6 +23,15 @@ export function useCliEvents() {
       const store = useChatStore.getState()
       const sessionStore = useSessionStore.getState()
 
+      if (event.event === 'nexclaw_spawn_auth') {
+        console.info(
+          '%c[NexClaw spawn auth]',
+          'color:#7c4dff;font-weight:bold',
+          event.summary ?? event,
+        )
+        return
+      }
+
       switch (event.event) {
         case 'message_start': {
           const id = (event.id as string) || crypto.randomUUID()

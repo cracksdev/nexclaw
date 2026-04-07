@@ -78,6 +78,46 @@ function dbg(tag: string, ...args: unknown[]): void {
   console.log(`[CLI:${tag}]`, ...args)
 }
 
+/** Env presence for auth debugging — never logs secret values, only lengths / absent. */
+function envCredentialFlag(env: NodeJS.ProcessEnv, name: string): string {
+  const v = env[name]
+  if (v === undefined) return 'absent'
+  const t = String(v).trim()
+  if (!t) return 'empty'
+  return `set(len=${t.length})`
+}
+
+function buildAuthEnvSummary(
+  providerEnv: Record<string, string>,
+  childEnv: NodeJS.ProcessEnv,
+): Record<string, unknown> {
+  const path = childEnv.PATH ?? ''
+  const configHome =
+    childEnv.CLAUDE_CONFIG_DIR ?? join(childEnv.HOME ?? homedir(), '.claude')
+  const credentialsJson = join(configHome, '.credentials.json')
+  return {
+    platform: process.platform,
+    home: childEnv.HOME ?? null,
+    user: childEnv.USER ?? null,
+    logname: childEnv.LOGNAME ?? null,
+    pathIncludesUsrBin: path.includes('/usr/bin'),
+    pathPrefix: path.split(':').slice(0, 5).join(':'),
+    claudeConfigDir:
+      childEnv.CLAUDE_CONFIG_DIR ?? '(unset; CLI uses homedir()/.claude)',
+    credentialsJsonPath: credentialsJson,
+    credentialsJsonExists: existsSync(credentialsJson),
+    providerUiKeys: Object.keys(providerEnv),
+    ANTHROPIC_API_KEY: envCredentialFlag(childEnv, 'ANTHROPIC_API_KEY'),
+    ANTHROPIC_AUTH_TOKEN: envCredentialFlag(childEnv, 'ANTHROPIC_AUTH_TOKEN'),
+    CLAUDE_CODE_OAUTH_TOKEN: envCredentialFlag(childEnv, 'CLAUDE_CODE_OAUTH_TOKEN'),
+    NODE_OPTIONS: envCredentialFlag(childEnv, 'NODE_OPTIONS'),
+    nexclawAuthDebug:
+      ['1', 'true', 'yes'].includes(
+        (process.env['NEXCLAW_AUTH_DEBUG'] ?? '').toLowerCase().trim(),
+      ) || false,
+  }
+}
+
 export interface ProviderConfig {
   provider: string
   model: string
@@ -239,6 +279,11 @@ export class CliManager extends EventEmitter {
       }
     }
 
+    const authDbg = process.env['NEXCLAW_AUTH_DEBUG']?.toLowerCase().trim()
+    if (authDbg === '1' || authDbg === 'true' || authDbg === 'yes') {
+      env.CLAUDE_CODE_DEBUG_LOG_LEVEL = 'verbose'
+    }
+
     return env
   }
 
@@ -393,10 +438,18 @@ export class CliManager extends EventEmitter {
 
       const nodeBin = resolveNodeBinary()
       dbg('spawn', 'nodeBin=', nodeBin)
+      const childEnv = this.buildCliChildEnv(providerEnv)
+      const authSummary = buildAuthEnvSummary(providerEnv, childEnv)
+      dbg('spawn-auth', authSummary)
+      this.emit('event', {
+        event: 'nexclaw_spawn_auth',
+        summary: authSummary,
+      })
+
       this.process = spawn(nodeBin, args, {
         cwd: this.workingDir,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: this.buildCliChildEnv(providerEnv),
+        env: childEnv,
       })
 
       dbg('spawn', 'pid=', this.process.pid)
