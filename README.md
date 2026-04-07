@@ -53,7 +53,7 @@ Pre-built installers are available on the [Releases](../../releases) page.
 | Platform | File |
 |----------|------|
 | Windows | `nexclaw-x.x.x-setup.exe` |
-| macOS | `nexclaw-x.x.x.dmg` |
+| macOS | `nexclaw-x.x.x-arm64.dmg` / `nexclaw-x.x.x-x64.dmg` (per CPU) |
 
 ---
 
