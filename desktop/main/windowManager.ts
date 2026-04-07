@@ -1,5 +1,6 @@
 import { BrowserWindow, shell, app } from 'electron'
 import { join } from 'path'
+import { rendererLoadedFromDevServer } from './rendererEnv'
 
 const isDev = !app.isPackaged
 
@@ -16,7 +17,8 @@ export function createMainWindow(): BrowserWindow {
       preload: join(__dirname, '../preload/index.cjs'),
       sandbox: false,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      webSecurity: rendererLoadedFromDevServer(),
     },
     backgroundColor: '#ffffff',
     show: false,
