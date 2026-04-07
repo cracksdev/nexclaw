@@ -184,8 +184,13 @@ export class CliManager extends EventEmitter {
   /**
    * macOS GUI apps inherit a sparse `process.env` (no shell profile). Empty
    * `ANTHROPIC_API_KEY=` etc. still get forwarded and make Anthropic return 401;
-   * stripping them lets the CLI fall back to ~/.claude/. HOME/USER are normalized
-   * so credential paths resolve like in Terminal.
+   * stripping them lets the CLI fall back to OAuth / ~/.claude/.
+   *
+   * Claude Code stores OAuth in the macOS Keychain under `security -a "$USER"`.
+   * If USER/HOME differ from Terminal (where /login ran), keychain read fails,
+   * tokens are missing, and the API sees invalid auth → 401. We align USER,
+   * LOGNAME, HOME, and PATH with the real login user so keychain + ~/.claude
+   * match `claude` in Terminal.
    */
   private buildCliChildEnv(providerEnv: Record<string, string>): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = {
@@ -196,22 +201,32 @@ export class CliManager extends EventEmitter {
     }
 
     const home = homedir()
-    if (!env.HOME?.trim()) {
+    if (process.platform === 'darwin') {
       env.HOME = home
-    }
-    if (process.platform === 'win32' && !env.USERPROFILE?.trim()) {
-      env.USERPROFILE = home
-    }
-    if (process.platform === 'darwin' && !env.USER?.trim()) {
       try {
-        env.USER = userInfo().username
+        const u = userInfo().username
+        env.USER = u
+        env.LOGNAME = u
       } catch {
         /* ignore */
+      }
+      const sysPaths = '/usr/bin:/bin:/usr/sbin:/sbin'
+      const p = env.PATH ?? ''
+      if (!p.includes('/usr/bin')) {
+        env.PATH = p ? `${sysPaths}:${p}` : sysPaths
+      }
+    } else {
+      if (!env.HOME?.trim()) {
+        env.HOME = home
+      }
+      if (process.platform === 'win32' && !env.USERPROFILE?.trim()) {
+        env.USERPROFILE = home
       }
     }
 
     const stripIfEmpty = [
       'ANTHROPIC_API_KEY',
+      'ANTHROPIC_AUTH_TOKEN',
       'OPENAI_API_KEY',
       'GEMINI_API_KEY',
       'GITHUB_TOKEN',
