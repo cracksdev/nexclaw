@@ -4,6 +4,7 @@ import { existsSync, readdirSync } from 'fs'
 import { homedir, userInfo } from 'os'
 import { join } from 'path'
 import { app } from 'electron'
+import { tryInjectClaudeOAuthFromKeychain } from './macosKeychainOAuth'
 
 /**
  * On macOS, packaged Electron apps launch with a minimal PATH that doesn't
@@ -282,6 +283,10 @@ export class CliManager extends EventEmitter {
     const authDbg = process.env['NEXCLAW_AUTH_DEBUG']?.toLowerCase().trim()
     if (authDbg === '1' || authDbg === 'true' || authDbg === 'yes') {
       env.CLAUDE_CODE_DEBUG_LOG_LEVEL = 'verbose'
+    }
+
+    if (tryInjectClaudeOAuthFromKeychain(env)) {
+      dbg('keychain-oauth', 'main process read Keychain; set CLAUDE_CODE_OAUTH_TOKEN for CLI child')
     }
 
     return env
