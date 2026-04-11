@@ -1,17 +1,21 @@
 import { execFileSync } from 'child_process'
 import { createHash } from 'crypto'
+import { existsSync, mkdirSync, writeFileSync, chmodSync, readFileSync } from 'fs'
 import { homedir, userInfo } from 'os'
 import { join } from 'path'
 
-/**
- * Mirrors src/utils/secureStorage/macOsKeychainHelpers.ts service name so we read
- * the same Keychain item as `claude /login`. OAuth suffix is empty for production;
- * set CLAUDE_CODE_KEYCHAIN_OAUTH_SUFFIX=-staging-oauth if your CLI used staging.
- */
+function log(...args: unknown[]): void {
+  console.log('[CLI:keychain-oauth]', ...args)
+}
+
 function claudeConfigDir(env: NodeJS.ProcessEnv): string {
   return (env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude')).normalize('NFC')
 }
 
+/**
+ * Must match src/utils/secureStorage/macOsKeychainHelpers.ts exactly.
+ * Default prod service: "Claude Code-credentials"
+ */
 function claudeCodeCredentialsServiceName(env: NodeJS.ProcessEnv): string {
   const oauthSuffix = env.CLAUDE_CODE_KEYCHAIN_OAUTH_SUFFIX ?? ''
   const dir = claudeConfigDir(env)
@@ -23,42 +27,102 @@ function claudeCodeCredentialsServiceName(env: NodeJS.ProcessEnv): string {
 }
 
 type KeychainCredentialsJson = {
-  claudeAiOauth?: { accessToken?: string }
+  claudeAiOauth?: { accessToken?: string; refreshToken?: string | null }
+}
+
+function extractOAuthToken(raw: string): string | null {
+  try {
+    const data = JSON.parse(raw) as KeychainCredentialsJson
+    const token = data?.claudeAiOauth?.accessToken
+    if (typeof token === 'string' && token.length > 0) return token
+  } catch (e) {
+    log('JSON parse failed:', e instanceof Error ? e.message : String(e))
+  }
+  return null
 }
 
 /**
- * GUI-spawned Node often cannot read the user's login Keychain via `security`
- * (TCC / code identity). Electron's main process can succeed; inject the OAuth
- * access token so cli.mjs skips Keychain reads for this turn.
+ * Electron main process reads Keychain and injects CLAUDE_CODE_OAUTH_TOKEN.
  *
- * Note: env-only token has no refreshToken — if access token expires, user may
- * need /login again or restart from Terminal once; primary goal is fixing 401
- * when Keychain read fails in the child only.
+ * If Keychain read succeeds AND ~/.claude/.credentials.json does NOT exist,
+ * also writes the credentials to disk so the CLI child process has a
+ * plaintext fallback (macOS Keychain ACLs may block the child).
  */
 export function tryInjectClaudeOAuthFromKeychain(env: NodeJS.ProcessEnv): boolean {
   if (process.platform !== 'darwin') return false
-  if (env.CLAUDE_CODE_OAUTH_TOKEN) return false
+  if (env.CLAUDE_CODE_OAUTH_TOKEN) {
+    log('CLAUDE_CODE_OAUTH_TOKEN already set, skipping')
+    return false
+  }
 
-  const account = env.USER || userInfo().username
+  const account = env.USER || (() => { try { return userInfo().username } catch { return '' } })()
   const service = claudeCodeCredentialsServiceName(env)
+  const configDir = claudeConfigDir(env)
+  const credPath = join(configDir, '.credentials.json')
 
+  log('attempt:', { account, service, configDir, credPath, credFileExists: existsSync(credPath) })
+
+  // --- Strategy 1: read existing plaintext .credentials.json ---
+  if (existsSync(credPath)) {
+    try {
+      const raw = readFileSync(credPath, 'utf8')
+      const token = extractOAuthToken(raw)
+      if (token) {
+        log('token from .credentials.json, len=', token.length)
+        env.CLAUDE_CODE_OAUTH_TOKEN = token
+        return true
+      }
+      log('.credentials.json exists but no valid token inside')
+    } catch (e) {
+      log('.credentials.json read error:', e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  // --- Strategy 2: read Keychain via security CLI ---
+  let keychainRaw: string | null = null
   try {
     const out = execFileSync(
       '/usr/bin/security',
       ['find-generic-password', '-a', account, '-w', '-s', service],
-      { encoding: 'utf8', timeout: 15_000, maxBuffer: 2_000_000 },
+      { encoding: 'utf8', timeout: 15_000, maxBuffer: 2_000_000, stdio: ['ignore', 'pipe', 'pipe'] },
     )
-    const trimmed = out?.trim()
-    if (!trimmed) return false
-
-    const data = JSON.parse(trimmed) as KeychainCredentialsJson
-    const token = data?.claudeAiOauth?.accessToken
-    if (typeof token === 'string' && token.length > 0) {
-      env.CLAUDE_CODE_OAUTH_TOKEN = token
-      return true
-    }
-  } catch {
-    /* ENOACCESS, wrong service, parse error — CLI may still try keychain */
+    keychainRaw = out?.trim() ?? null
+    log('security returned', keychainRaw ? `${keychainRaw.length} chars` : 'empty')
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    const code = (e as { status?: number })?.status
+    log('security failed:', { code, msg: msg.substring(0, 300) })
+    log('TIP: run in Terminal:')
+    log(`  security find-generic-password -a "${account}" -w -s "${service}"`)
+    log('If that also fails, re-run: claude login   (or nexclaw /login)')
+    return false
   }
-  return false
+
+  if (!keychainRaw) {
+    log('keychain entry empty')
+    return false
+  }
+
+  const token = extractOAuthToken(keychainRaw)
+  if (!token) {
+    log('keychain JSON has no claudeAiOauth.accessToken')
+    return false
+  }
+
+  log('token from Keychain, len=', token.length)
+  env.CLAUDE_CODE_OAUTH_TOKEN = token
+
+  // Write .credentials.json so CLI subprocess has plaintext fallback
+  try {
+    if (!existsSync(configDir)) {
+      mkdirSync(configDir, { recursive: true })
+    }
+    writeFileSync(credPath, keychainRaw, { encoding: 'utf8' })
+    chmodSync(credPath, 0o600)
+    log('wrote .credentials.json for CLI fallback')
+  } catch (e) {
+    log('could not write .credentials.json:', e instanceof Error ? e.message : String(e))
+  }
+
+  return true
 }
